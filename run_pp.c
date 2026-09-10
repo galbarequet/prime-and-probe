@@ -4,8 +4,8 @@
 #include <assert.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include <x86intrin.h>
 
+#include "arch_primitives.h"
 #include "pp.h"
 #include "consts.h"
 #include "victim.h"
@@ -119,7 +119,7 @@ void prime_and_probe_set(size_t repetitions, size_t set, size_t lines)
         victim(set, lines);
         after = probe_set(set);
 
-        _mm_mfence();
+        memory_fence();
         results.before = before;
         results.after = after;
 

@@ -1,4 +1,10 @@
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Darwin)
+CC = clang
+else
 CC = gcc
+endif
 
 ifeq ($(DEBUG),1)
 CFLAGS = -g -Wall -Wextra -std=c11

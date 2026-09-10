@@ -2,7 +2,6 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <x86intrin.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <string.h>
@@ -10,6 +9,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 
+#include "arch_primitives.h"
 #include "consts.h"
 #include "victim.h"
 #include "pointer_chasing.h"
@@ -31,9 +31,8 @@ void ppinit(void)
     init_victim();
 
     /* provided code for ramping up CPU */
-    uint32_t dummy;
-    uint64_t start = __rdtscp(&dummy);
-    while (__rdtscp(&dummy) - start < 1000000000) ;
+    uint64_t start = read_clock();
+    while (read_clock() - start < clock_ticks_per_second()) ;
 }
 
 void prime(void)
@@ -43,20 +42,19 @@ void prime(void)
 
     do {
         idx = buffer[idx].prev;
-        _mm_mfence();
+        memory_fence();
     } while (idx != head);
 }
 
 void probe(uint64_t result[NUM_SETS])
 {
-    uint32_t dummy = 0;
     uint16_t idx = GET_BUFFER_IDX(set_order[0], line_order[0]);  // probing all sets in the order of the permutation
 
     for (size_t s = 0; s < NUM_SETS; s++)
     {
         uint16_t set = set_order[s];
 
-        uint64_t start = __rdtscp(&dummy);
+        uint64_t start = read_clock();
         for (size_t l = 0; l < NUM_LINES; l++)
         {
             // size_t debug_set = 0, debug_line = 0;
@@ -65,7 +63,7 @@ void probe(uint64_t result[NUM_SETS])
 
             idx = buffer[idx].next;  // using get_set_and_line_from_buffer_idx() I verified that the idx corresponds to the expected set
         }
-        uint64_t end = __rdtscp(&dummy);
+        uint64_t end = read_clock();
         result[set] = (end - start);
     }
 }
@@ -73,14 +71,13 @@ void probe(uint64_t result[NUM_SETS])
 void probe_set_per_line(size_t set, uint64_t result[NUM_LINES])
 {
     uint64_t start = 0, end = 0, duration = 0;
-    uint32_t dummy = 0;
     uint16_t idx = GET_BUFFER_IDX(set, line_order[0]);
 
     for (size_t l = 0; l < NUM_LINES; l++)
     {
-        start = __rdtscp(&dummy);
+        start = read_clock();
         idx = buffer[idx].next;
-        end = __rdtscp(&dummy);
+        end = read_clock();
         duration = (end - start);
         if (duration < 200)
         {
@@ -92,10 +89,9 @@ void probe_set_per_line(size_t set, uint64_t result[NUM_LINES])
 uint64_t probe_set(size_t set)
 {
     uint64_t start = 0, end = 0;
-    uint32_t dummy = 0;
     uint16_t idx = GET_BUFFER_IDX(set, line_order[0]);
 
-    start = __rdtscp(&dummy);
+    start = read_clock();
     for (size_t l = 0; l < NUM_LINES; l++)
     {
         // size_t debug_set = 0, debug_line = 0;
@@ -104,6 +100,6 @@ uint64_t probe_set(size_t set)
 
         idx = buffer[idx].next;
     }
-    end = __rdtscp(&dummy);
+    end = read_clock();
     return (end - start);
 }

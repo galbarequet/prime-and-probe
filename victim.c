@@ -1,5 +1,5 @@
-#include <x86intrin.h>
 #include <assert.h>
+#include "arch_primitives.h"
 #include "pointer_chasing.h"
 #include "consts.h"
 #include "victim.h"
@@ -20,7 +20,7 @@ void victim(size_t victim_set, size_t victim_lines)
         return;
     }
     
-    _mm_mfence();
+    memory_fence();
 
     uint16_t idx = GET_BUFFER_IDX(victim_set, victim_line_order[0]);
     for (size_t l = 0; l < victim_lines; l++)
