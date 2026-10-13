@@ -2,6 +2,7 @@ UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Darwin)
 CC = clang
+LDLIBS = -lpthread
 else
 CC = gcc
 endif
@@ -16,11 +17,11 @@ endif
 
 all: pp aes_pp
 
-pp: pp.c victim.c run_pp.c pointer_chasing.c
-	$(CC) $(CFLAGS) -o pp pp.c victim.c run_pp.c pointer_chasing.c
+pp: pp.c victim.c run_pp.c pointer_chasing.c cpu_affinity.c
+	$(CC) $(CFLAGS) -o pp pp.c victim.c run_pp.c pointer_chasing.c cpu_affinity.c $(LDLIBS)
 
-aes_pp: aes_pp.c pp.c victim.c pointer_chasing.c aes_utils.c AES/aes_core.c
-	$(CC) $(CFLAGS) -o aes_pp aes_pp.c pp.c victim.c pointer_chasing.c aes_utils.c AES/aes_core.c
+aes_pp: aes_pp.c pp.c victim.c pointer_chasing.c aes_utils.c AES/aes_core.c cpu_affinity.c
+	$(CC) $(CFLAGS) -o aes_pp aes_pp.c pp.c victim.c pointer_chasing.c aes_utils.c AES/aes_core.c cpu_affinity.c $(LDLIBS)
 
 clean:
 	rm -f pp aes_pp

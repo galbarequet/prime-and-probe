@@ -9,6 +9,7 @@
 #include "AES/aes.h"
 #include "pp.h"
 #include "consts.h"
+#include "cpu_affinity.h"
 
 #define PRIME_AND_PROBE_AES_RESULTS_FILENAME ("./results/raw/aes_results.csv")
 
@@ -23,17 +24,26 @@ void run_prime_and_probe_on_aes(AES_KEY *aeskey, unsigned long long n, probe_res
 {
     ppinit();
 
-    for (unsigned long long i = 0; i < n; ++i) {
+    unsigned long long i = 0;
+    while (i < n)
+    {
         aes_t plaintext = {0};
         aes_t ciphertext = {0};
         rand_aes_plaintext(plaintext);
 
+        unsigned current_core = current_cpu();
         prime();
         AES_encrypt(plaintext, ciphertext, aeskey);
         probe(probe_results[i].probe_measurements);
+        if (current_cpu() != current_core)  // crossed cores -> retry
+        {
+            continue;
+        }
 
         memcpy(probe_results[i].plaintext, plaintext, AESSIZE);
         memcpy(probe_results[i].ciphertext, ciphertext, AESSIZE);
+
+        ++i;
     }
 }
 

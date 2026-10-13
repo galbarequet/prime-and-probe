@@ -12,10 +12,12 @@ make pp
 Running:
 
 ```bash
-taskset -c 0 ./pp
+./pp
 ```
 
 (Assuming core 0 has a L1 cache with specifications fitting to those in consts.h)
+
+> No `taskset` needed. The program pins itself in `ppinit()`: on Linux it calls `sched_setaffinity` to core 0, and on macOS / Apple Silicon (where `taskset` does not exist and no hard pinning is available) it raises its QoS class to `USER_INTERACTIVE` to bias the thread onto a performance (P) core and discards any sample where the scheduler still migrated the thread mid-measurement.
 
 Analyzing results:
 
@@ -26,7 +28,7 @@ python ./read_results.py
 All in one:
 
 ```bash
-make pp && taskset -c 0 ./pp && python ./read_results.p
+make pp && ./pp && python ./read_results.py
 ```
 
 Expects the raw results to be in `./results/raw/results.csv` (very large file). Creates the prime+probe heatmap (saved to `./results/prime_probe_heatmap.png`).
@@ -42,7 +44,7 @@ Analyzing results using: `python ./read_set_results <results_file_name>`. Result
 Compile, run and analyze all results:
 
 ```bash
-make pp && for f in `taskset -c 0 ./pp`; do python ./read_set_results.py $f; done
+make pp && for f in `./pp`; do python ./read_set_results.py $f; done
 ```
 
 (Still assuming core 0 has a L1 cache with specifications fitting to those in consts.h)
@@ -66,7 +68,7 @@ Args: a 32-digit hexadecimal number that represents an AES `key`, and a number o
 Example:
 
 ```bash
-taskset -c 0 ./aes_pp 00112233445566778899aabbccddeeff 100000
+./aes_pp 00112233445566778899aabbccddeeff 100000
 ```
 
 The measurements are saved to `./results/raw/aes_results.csv`. The file will contain `n` entries, with the plaintext, ciphertext and measurements collected for each set.

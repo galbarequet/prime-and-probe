@@ -30,7 +30,7 @@ static inline uint64_t read_clock(void)
 {
     uint64_t t;
 
-    asm volatile(
+    __asm__ volatile(
         "isb\n"
         "mrs %0, cntvct_el0\n"
         "isb\n"
@@ -51,7 +51,7 @@ static inline uint64_t clock_ticks_per_second(void)
 {
     uint64_t frequency;
 
-    asm volatile(
+    __asm__ volatile(
         "isb\n"
         "mrs %0, cntfrq_el0\n"
         "isb\n"

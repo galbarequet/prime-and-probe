@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 
 #include "arch_primitives.h"
+#include "cpu_affinity.h"
 #include "consts.h"
 #include "victim.h"
 #include "pointer_chasing.h"
@@ -27,6 +28,8 @@ _Static_assert(BUFFER_NUM_ELEMS <= UINT16_MAX, "uint16_t is too small to index t
 
 void ppinit(void)
 {    
+    pin_to_core(0);   /* taskset -c 0 replacement; QoS P-core bias on macOS */
+
     init_doubly_linked_list_structure(set_order, line_order, buffer);
     init_victim();
 

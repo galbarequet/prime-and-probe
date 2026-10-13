@@ -6,6 +6,7 @@
 #include <errno.h>
 
 #include "arch_primitives.h"
+#include "cpu_affinity.h"
 #include "pp.h"
 #include "consts.h"
 #include "victim.h"
@@ -41,18 +42,26 @@ void prime_and_probe(size_t repetitions)
     probe_results_t *probe_times = calloc(repetitions, sizeof(probe_results_t));
     assert(probe_times != NULL);
 
-    for (size_t i = 0; i < repetitions; i++)
+    size_t i = 0;
+    while (i < repetitions)
     {
         size_t victim_set = rand() % NUM_SETS;
         size_t victim_line_count = rand() % VICTIM_NUM_LINES_OPTIONS;
 
+        unsigned c0 = current_cpu();
         prime();
         victim(victim_set, victim_line_count);
         probe(result.probe);
+        if (current_cpu() != c0)  // crossed cores -> retry
+        {
+            continue;
+        }
 
         result.victim_set = victim_set;
         result.victim_line_count = victim_line_count;
         probe_times[i] = result;
+
+        ++i;
     }
 
     FILE *fp = fopen(PRIME_AND_PROBE_RESULTS_FILENAME, "w");
@@ -74,18 +83,26 @@ void prime_and_probe_set_per_line(size_t repetitions, size_t set, size_t lines)
     probe_per_line_results_t results = {0};
     probe_per_line_results_t *probe_times = calloc(repetitions, sizeof(probe_per_line_results_t));
 
-    for (size_t i = 0; i < repetitions; i++)
+    size_t i = 0;
+    while (i < repetitions)
     {
         memset(&results, 0, sizeof(results));
+        unsigned c0 = current_cpu();
         prime();
         probe_set_per_line(set, results.before);
         victim(set, lines);
         probe_set_per_line(set, results.after);
+        if (current_cpu() != c0)  // crossed cores -> retry
+        {
+            continue;
+        }
         // if (results.before[0] > 500 || results.after[0] > 500)
         // {
         //     continue; // will remain 0. to filter later.
         // }
         probe_times[i] = results;
+
+        ++i;
     }
 
     char filename[sizeof(PRIME_AND_PROBE_SET_PER_LINE_RESULTS_FILENAME) + 20];
@@ -111,13 +128,19 @@ void prime_and_probe_set(size_t repetitions, size_t set, size_t lines)
     probe_set_results_t *probe_times = calloc(repetitions, sizeof(results));
     size_t before = 0, after = 0;
 
-    for (size_t i = 0; i < repetitions; i++)
+    size_t i = 0;
+    while (i < repetitions)
     {
         memset(&results, 0, sizeof(results));
+        unsigned c0 = current_cpu();
         prime();
         before = probe_set(set);
         victim(set, lines);
         after = probe_set(set);
+        if (current_cpu() != c0)  // crossed cores -> retry
+        {
+            continue;
+        }
 
         memory_fence();
         results.before = before;
@@ -128,6 +151,8 @@ void prime_and_probe_set(size_t repetitions, size_t set, size_t lines)
         //     continue; // will remain 0. to filter later.
         // }
         probe_times[i] = results;
+
+        ++i;
     }
 
     char filename[sizeof(PRIME_AND_PROBE_SET_RESULTS_FILENAME) + 20];
