@@ -4,7 +4,7 @@
 #include "consts.h"
 #include "victim.h"
 
-static volatile doubly_linked_list_elem_t victim_buffer[NUM_SETS * NUM_LINES * BLOCK_SIZE / sizeof(doubly_linked_list_elem_t)] __attribute__((aligned(4096))) = {0};
+static volatile doubly_linked_list_elem_t victim_buffer[NUM_SETS * NUM_LINES * BLOCK_SIZE / sizeof(doubly_linked_list_elem_t)] __attribute__((aligned(BUFFER_ALIGNMENT))) = {0};
 static uint16_t victim_set_order[NUM_SETS] = {0};  // victim only ever accesses one set at a time, so actually no need for set permutations
 static uint16_t victim_line_order[NUM_LINES] = {0};
 

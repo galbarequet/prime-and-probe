@@ -69,4 +69,19 @@ static inline uint64_t clock_ticks_per_second(void)
 
 #endif
 
+/*
+ * Reduce scheduler-induced measurement noise for the current (measuring) thread.
+ * On macOS this biases the thread onto the performance cluster, or onto the
+ * efficiency cluster when built with -DUSE_EFFICIENCY_CORE; on Linux it delegates
+ * to pin_to_core(0); elsewhere it is a no-op.
+ */
+void pin_current_thread(void);
+
+/*
+ * Verify the compile-time cache geometry (consts.h) against the real hardware
+ * and abort on a hard mismatch (e.g. wrong cache-line size). No-op on platforms
+ * whose geometry cannot be queried.
+ */
+void verify_cache_geometry(void);
+
 #endif /* ARCH_PRIMITIVES_H */

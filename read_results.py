@@ -8,6 +8,12 @@ def read_results(file_path):
     results = df[df['probe_set'] == df['victim_set']]
     results = results[['victim_set', 'victim_line_count', 'probe_time']].reset_index(drop=True)
 
+    # derive geometry from the capture so the plot ticks match NUM_SETS/NUM_LINES
+    # the binary was built with (E-core=8 ways, P-core=16), instead of hardcoding.
+    num_sets = int(results["victim_set"].max()) + 1
+    num_lines = int(results["victim_line_count"].max())
+    print(f"detected geometry: {num_sets} sets, up to {num_lines} victim lines")
+
     bottom = results["probe_time"].quantile(0.05)
     top = results["probe_time"].quantile(0.95)
 
@@ -39,8 +45,8 @@ def read_results(file_path):
     plt.ylabel("Number of accessed lines")
     plt.title("Average probe time by cache set and victim accesses")
 
-    plt.xticks(range(0, 64, 4))
-    plt.yticks(range(0, 13))
+    plt.xticks(range(0, num_sets, 4))
+    plt.yticks(range(0, num_lines + 1))
 
     plt.tight_layout()
     plt.savefig("./results/prime_probe_heatmap.png", dpi=200, bbox_inches="tight")

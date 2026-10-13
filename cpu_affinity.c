@@ -2,6 +2,7 @@
 #include "cpu_affinity.h"
 
 #include <stdint.h>
+#include <stdio.h>
 
 #if defined(__linux__)
 
@@ -29,7 +30,12 @@ unsigned current_cpu(void)
 int pin_to_core(int core)
 {
     (void)core;   /* arm64 macOS has no hard CPU pinning from user space */
-    return pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+    if (pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0) != 0)
+    {
+        perror("pthread_set_qos_class_self_np");
+        return -1;
+    }
+    return 0;
 }
 
 #if defined(__aarch64__) || defined(__arm64__)

@@ -10,14 +10,13 @@
 #include <sys/stat.h>
 
 #include "arch_primitives.h"
-#include "cpu_affinity.h"
 #include "consts.h"
 #include "victim.h"
 #include "pointer_chasing.h"
 #include "pp.h"
 
 // static volatile uint8_t buffer[NUM_SETS * NUM_LINES * BLOCK_SIZE] __attribute__((aligned(4096))) = {0};
-static volatile doubly_linked_list_elem_t buffer[NUM_SETS * NUM_LINES * BLOCK_SIZE / sizeof(doubly_linked_list_elem_t)] __attribute__((aligned(4096))) = {0};
+static volatile doubly_linked_list_elem_t buffer[NUM_SETS * NUM_LINES * BLOCK_SIZE / sizeof(doubly_linked_list_elem_t)] __attribute__((aligned(BUFFER_ALIGNMENT))) = {0};
 static uint16_t set_order[NUM_SETS] = {0};
 static uint16_t line_order[NUM_LINES] = {0};
 
@@ -27,8 +26,9 @@ _Static_assert(__builtin_types_compatible_p(__typeof__(buffer[0].next), uint16_t
 _Static_assert(BUFFER_NUM_ELEMS <= UINT16_MAX, "uint16_t is too small to index the buffer");
 
 void ppinit(void)
-{    
-    pin_to_core(0);   /* taskset -c 0 replacement; QoS P-core bias on macOS */
+{
+    pin_current_thread();      /* QoS/E-core bias on macOS, hard affinity on Linux */
+    verify_cache_geometry();   /* abort on a line-size mismatch with consts.h */
 
     init_doubly_linked_list_structure(set_order, line_order, buffer);
     init_victim();

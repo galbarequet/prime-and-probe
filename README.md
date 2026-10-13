@@ -17,7 +17,9 @@ Running:
 
 (Assuming core 0 has a L1 cache with specifications fitting to those in consts.h)
 
-> No `taskset` needed. The program pins itself in `ppinit()`: on Linux it calls `sched_setaffinity` to core 0, and on macOS / Apple Silicon (where `taskset` does not exist and no hard pinning is available) it raises its QoS class to `USER_INTERACTIVE` to bias the thread onto a performance (P) core and discards any sample where the scheduler still migrated the thread mid-measurement.
+> No `taskset` needed. The program pins itself in `ppinit()` (`pin_current_thread`): on Linux it calls `sched_setaffinity` to core 0, and on macOS / Apple Silicon (where `taskset` does not exist and no hard pinning is available) it uses the QoS class to bias the thread onto one cluster. **The default build targets the efficiency (E) cluster** (`QOS_CLASS_BACKGROUND`), which gives a cleaner heatmap on Apple Silicon; build with `make pp EFFICIENCY_CORE=0` to target a performance (P) core instead (`QOS_CLASS_USER_INTERACTIVE` + a real-time policy). Either way it discards any sample where the scheduler migrated the thread mid-measurement (`current_cpu()` retry in `run_pp.c`).
+>
+> `ppinit()` also calls `verify_cache_geometry()`, which checks the compile-time cache geometry in `consts.h` against the real hardware (via `sysctl` on macOS, `sysconf` on Linux) and **aborts on a line-size mismatch** so a wrong guess fails loudly instead of silently producing a dead attack. The E-/P-core geometry (`BLOCK_SIZE`/`NUM_SETS`/`NUM_LINES`) is selected automatically in `consts.h`; override any of them with `-D...` if needed.
 
 Analyzing results:
 
