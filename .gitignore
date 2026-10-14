@@ -60,6 +60,12 @@ pp
 test_flush_cache
 aes_pp
 AES/aes
+cycle_counter_test
+pmu_test
+test_map
 
 # raw results (large files)
 results/raw/
+
+# generated figures (commit chosen ones explicitly with `git add -f`)
+results/*.png
