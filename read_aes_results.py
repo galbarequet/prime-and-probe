@@ -1,3 +1,7 @@
+import argparse
+import platform
+import subprocess
+
 import pandas as pd
 import polars as pl
 import numpy as np
@@ -6,6 +10,33 @@ import matplotlib.pyplot as plt
 
 CIPHER_TEXT_SIZE = 16
 PROBE_SET_COLUMN_NAME = 'probe_set_{}'
+
+
+def _detect_cache_line_size(default=64):
+    """Cache line size in bytes, used to map a T-table entry to a cache set.
+
+    This MUST equal the BLOCK_SIZE the probe binary was built with -- the probe
+    buffer is laid out in BLOCK_SIZE-byte lines, and the C side's
+    verify_cache_geometry() asserts (hardware line size == BLOCK_SIZE), so the
+    hardware value is authoritative.
+
+    On Apple Silicon the line size is 128 B and is INVARIANT across the P and E
+    clusters: the two differ only in L1D size and associativity (P: 128 KB/16-way,
+    E: 64 KB/8-way), neither of which changes the line size or the set count
+    (64), and neither of which enters this correlation model. So it does not
+    matter which core pp/aes_pp was pinned to. We default to 64 for non-macOS
+    (typical x86 BLOCK_SIZE) when the sysctl is unavailable.
+    """
+    if platform.system() == 'Darwin':
+        try:
+            out = subprocess.check_output(['sysctl', '-n', 'hw.cachelinesize'])
+            return int(out.strip())
+        except (subprocess.SubprocessError, ValueError, OSError):
+            pass
+    return default
+
+
+CACHE_LINE_SIZE = _detect_cache_line_size()
 
 # Standard AES Inverse S-Box array
 INV_SBOX = np.array([
@@ -66,37 +97,49 @@ def _read_aes_pp_results(file_path):
 def read_results(file_path):
     df = _read_aes_pp_results(file_path)
     prepared_data = _prepare_correlation_data(df)
-    total_results = []
+    num_sets = prepared_data[4]
+
+    # Correlation scores per ciphertext byte, pivoted to a [key_byte, table_start_set]
+    # matrix so we can pick the key and the table offset jointly.
+    score_matrices = []
     for i in range(CIPHER_TEXT_SIZE):
         print(f'Running correlation for ciphertext byte index {i}...')
-        results = run_correlation(df, i, prepared_data=prepared_data).sort_values(by='score', ascending=False)
-        total_results.append({
-            'ciphertext_index': i,
-            'key_hex': results.iloc[0]['key_hex'],
-            'table_start_set': results.iloc[0]['table_start_set'],
-        })
-        # print(f'Ciphertext index {i} top 5 guesses:')
-        # print(f'{results.head(5).to_string(index=False)}\n')
+        results = run_correlation(df, i, prepared_data=prepared_data)
+        matrix = (
+            results.pivot(index='key_byte_value', columns='table_start_set', values='score')
+            .sort_index()
+            .reindex(columns=range(num_sets))
+            .to_numpy()
+        )
+        score_matrices.append(matrix)
 
-    results_df = pd.DataFrame(total_results).set_index('ciphertext_index')
+    # table_start_set is a *shared* nuisance parameter: the four ciphertext bytes in
+    # a T-table group (index % 4) all index the SAME table, so they share one start
+    # set. Resolving it per group -- instead of independently per byte -- both avoids
+    # spurious +/-1 argmax jitter between bytes and regularizes weak-signal bytes.
+    key_bytes = [None] * CIPHER_TEXT_SIZE
+    group_start_sets = {}
+    for group in range(4):
+        bytes_in_group = [group + 4 * j for j in range(CIPHER_TEXT_SIZE // 4)]
+        # Best achievable score for each candidate start set, summed over the group.
+        group_score = sum(score_matrices[i].max(axis=0) for i in bytes_in_group)
+        start_set = int(np.argmax(group_score))
+        group_start_sets[group] = start_set
+        for i in bytes_in_group:
+            key_bytes[i] = int(np.argmax(score_matrices[i][:, start_set]))
 
-    # each T-table group (index % 4) should have the same table_start_set
-    results_df['t_table_group'] = results_df.index % 4
-    table_sets = results_df.groupby(results_df.index % 4)['table_start_set'].unique()
-    if any(len(sets) > 1 for sets in table_sets):
-        print("Warning: Inconsistent table_start_set values for T-table groups:")
-        print(table_sets)
-        print("This may indicate an issue with the correlation analysis or the data.")
-    else:
-        print('\nCorrelation analysis completed successfully.')
-        print("Final round key:")
-        key = results_df['key_hex'].str[2:].to_list()
-        print(' '.join(key))
-        k10_hex = ''.join(key)
-        k10_bytes = bytes.fromhex(k10_hex)
-        k0_bytes = reverse_key_schedule_128(k10_bytes)
-        print('Original AES-128 master key (Round Key 0):')
-        print(' '.join(f'{b:02X}' for b in k0_bytes))
+    print('\nRecovered per-group table start sets (set index of each T-table):')
+    for group in range(4):
+        print(f'  group {group} (bytes {group}, {group + 4}, {group + 8}, {group + 12}):'
+              f' set {group_start_sets[group]}')
+
+    print('\nFinal round key:')
+    key = [f'{b:02X}' for b in key_bytes]
+    print(' '.join(key))
+    k10_bytes = bytes(key_bytes)
+    k0_bytes = reverse_key_schedule_128(k10_bytes)
+    print('Original AES-128 master key (Round Key 0):')
+    print(' '.join(f'{b:02X}' for b in k0_bytes))
 
 
 def _prepare_correlation_data(df):
@@ -149,7 +192,7 @@ def run_correlation(df, ciphertext_byte_index, prepared_data=None):
     sums_by_value = byte_sums[ciphertext_byte_index]
     N = counts_by_value.sum()
 
-    cache_line_size = 64  # bytes
+    cache_line_size = CACHE_LINE_SIZE  # bytes; must match the build's BLOCK_SIZE
     table_entry_size = 4  # bytes
     table_cache_lines_count = INV_SBOX.size * table_entry_size // cache_line_size
     entries_per_cache_line = cache_line_size // table_entry_size
@@ -223,8 +266,17 @@ def reverse_key_schedule_128(k10_bytes: bytes) -> bytes:
 
 
 def main():
-    file_path = "./results/raw/aes_results.csv"
-    read_results(file_path)
+    parser = argparse.ArgumentParser(
+        description="Recover the AES-128 key from prime+probe measurements."
+    )
+    parser.add_argument(
+        "input_file",
+        nargs="?",
+        default="./results/raw/aes_results.csv",
+        help="CSV produced by aes_pp (default: ./results/raw/aes_results.csv)",
+    )
+    args = parser.parse_args()
+    read_results(args.input_file)
 
 
 if __name__ == "__main__":
