@@ -5,6 +5,17 @@
 #include <stdlib.h>
 
 /* ------------------------------------------------------------------------- */
+/* Clock backend                                                             */
+/* ------------------------------------------------------------------------- */
+
+/* The cntvct_el0 clock backend is defined inline in arch_primitives.h; its
+   one-time initialization is a no-op, kept as a stable seam for the ppinit()
+   call site. */
+void clock_init(void)
+{
+}
+
+/* ------------------------------------------------------------------------- */
 /* Cache-geometry verification                                               */
 /* ------------------------------------------------------------------------- */
 

@@ -28,6 +28,7 @@ _Static_assert(BUFFER_NUM_ELEMS <= UINT16_MAX, "uint16_t is too small to index t
 void ppinit(void)
 {
     pin_current_thread();      /* QoS/E-core bias on macOS, hard affinity on Linux */
+    clock_init();              /* one-time clock backend init (no-op for cntvct) */
     verify_cache_geometry();   /* abort on a line-size mismatch with consts.h */
 
     init_doubly_linked_list_structure(set_order, line_order, buffer);
@@ -57,7 +58,7 @@ void probe(uint64_t result[NUM_SETS])
     {
         uint16_t set = set_order[s];
 
-        uint64_t start = read_clock();
+        uint64_t start = read_clock_open();
         for (size_t l = 0; l < NUM_LINES; l++)
         {
             // size_t debug_set = 0, debug_line = 0;
@@ -66,7 +67,7 @@ void probe(uint64_t result[NUM_SETS])
 
             idx = buffer[idx].next;  // using get_set_and_line_from_buffer_idx() I verified that the idx corresponds to the expected set
         }
-        uint64_t end = read_clock();
+        uint64_t end = read_clock_close();
         result[set] = (end - start);
     }
 }
@@ -78,9 +79,9 @@ void probe_set_per_line(size_t set, uint64_t result[NUM_LINES])
 
     for (size_t l = 0; l < NUM_LINES; l++)
     {
-        start = read_clock();
+        start = read_clock_open();
         idx = buffer[idx].next;
-        end = read_clock();
+        end = read_clock_close();
         duration = (end - start);
         if (duration < 200)
         {
@@ -94,7 +95,7 @@ uint64_t probe_set(size_t set)
     uint64_t start = 0, end = 0;
     uint16_t idx = GET_BUFFER_IDX(set, line_order[0]);
 
-    start = read_clock();
+    start = read_clock_open();
     for (size_t l = 0; l < NUM_LINES; l++)
     {
         // size_t debug_set = 0, debug_line = 0;
@@ -103,6 +104,6 @@ uint64_t probe_set(size_t set)
 
         idx = buffer[idx].next;
     }
-    end = read_clock();
+    end = read_clock_close();
     return (end - start);
 }
